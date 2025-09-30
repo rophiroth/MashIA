@@ -1,0 +1,26 @@
+# OS/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Dependencies / builds
+node_modules/
+dist/
+build/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Env / local
+.env
+.env.*
+.git-askpass.sh
+
+# Gradle cache
+.gradle/
+# temp
+gradle-tmp/
+jdk-tmp/
