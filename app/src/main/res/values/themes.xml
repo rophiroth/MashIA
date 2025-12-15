@@ -1,0 +1,18 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.MashIA" parent="Theme.Material3.DayNight.NoActionBar">
+<<<<<<< HEAD
+        <!-- Colores básicos -->
+        <item name="colorPrimary">@color/pink_primary</item>
+        <item name="colorSecondary">@color/purple_500</item>
+        <item name="android:navigationBarColor">@color/purple_700</item>
+        <item name="android:statusBarColor">@color/purple_700</item>
+        <item name="android:windowBackground">@color/surface_bg</item>
+        <item name="android:textColor">@color/surface_fg</item>
+    </style>
+</resources>
+=======
+        <!-- Customize your theme here. -->
+    </style>
+</resources>
+
+>>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec

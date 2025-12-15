@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Placeholder: simple eye in a heart-like oval. Replace later with PNG foreground via Asset Studio. -->
+    <path
+        android:fillColor="#8B2A7B"
+        android:pathData="M54,86 C38,76 20,64 20,46 a16,16 0 0,1 28,-10 a16,16 0 0,1 28,10 c0,18 -18,30 -22,40 z"/>
+    <path
+        android:fillColor="#FFEFD5"
+        android:pathData="M54,60c14,0 26,10 30,16 -4,6 -16,16 -30,16 -14,0 -26,-10 -30,-16 4,-6 16,-16 30,-16z"/>
+    <path
+        android:fillColor="#301240"
+        android:pathData="M54,64a12,12 0 1,0 0,24 12,12 0 1,0 0,-24z"/>
+    <!-- lock arc -->
+    <path
+        android:fillColor="#F2B500"
+        android:pathData="M34,30 a20,20 0 0,1 40,0 v8 h-10 v-8 a10,10 0 0,0 -20,0 v8 h-10z"/>
+</vector>
+

@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">MashIA</string>
+    <string name="backend_url" />
+    <string name="openai_api_key"></string>
+    <string name="groq_api_key"></string>
+    <string name="groq_model">llama-3.1-8b-instant</string>
+    <string name="ai_base_openai">https://api.openai.com</string>
+    <string name="ai_base_groq">https://api.groq.com/openai</string>
+</resources>

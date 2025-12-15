@@ -1,0 +1,51 @@
+# OS/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Dependencies / builds
+node_modules/
+dist/
+build/
+<<<<<<< HEAD
+.cxx/
+app/.cxx/
+=======
+>>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Env / local
+.env
+.env.*
+.git-askpass.sh
+
+# Gradle cache
+.gradle/
+# temp
+gradle-tmp/
+jdk-tmp/
+<<<<<<< HEAD
+!/.vscode/tasks.json
+
+# Firebase config (local only)
+app/google-services.json
+
+# Local Android SDK cache
+.android-sdk/
+
+# Local Gradle/Android configs
+local.properties
+
+# Root-level Firebase config (do not commit)
+google-services.json
+
+# Modelos de IA que exceden el límite de 100MB de GitHub
+app/src/main/assets/models/ggml-base.bin
+app/src/main/res/values/strings.xml
+=======
+>>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
