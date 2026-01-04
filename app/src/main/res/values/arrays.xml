@@ -26,4 +26,13 @@
         <item>llama-3.2-11b-vision-preview (vision)</item>
         <item>llama-3.2-90b-vision-preview (vision)</item>
     </string-array>
+
+    <string-array name="library_sort_options">
+        <item>Recent</item>
+        <item>Title</item>
+        <item>Folder</item>
+        <item>Tags</item>
+        <item>Color</item>
+        <item>Old</item>
+    </string-array>
 </resources>

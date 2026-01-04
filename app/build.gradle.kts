@@ -1,10 +1,27 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
 
+fun loadLocalProp(key: String): String {
+    val localPropsFile = rootProject.file("local.properties")
+    if (!localPropsFile.exists()) return ""
+    val props = Properties()
+    localPropsFile.inputStream().use { props.load(it) }
+    return props.getProperty(key).orEmpty()
+}
+
+fun envOrLocal(key: String): String {
+    return System.getenv(key) ?: loadLocalProp(key)
+}
+
+fun escapeResValue(raw: String): String {
+    return raw.replace("\\", "\\\\").replace("\"", "\\\"")
+}
+
 android {
-<<<<<<< HEAD
     namespace = "org.psyhackers.mashia"
     compileSdk = 34
 
@@ -24,17 +41,11 @@ android {
                 arguments += listOf("-DANDROID_STL=c++_shared", "-DUSE_WHISPERCPP=ON")
             }
         }
-=======
-    namespace = "com.rophiroth.mashia"
-    compileSdk = 34
 
-    defaultConfig {
-        applicationId = "com.rophiroth.mashia"
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
+        val groqKey = escapeResValue(envOrLocal("GROQ_API_KEY"))
+        val openaiKey = escapeResValue(envOrLocal("OPENAI_API_KEY"))
+        resValue("string", "groq_api_key", groqKey)
+        resValue("string", "openai_api_key", openaiKey)
     }
 
     buildTypes {
@@ -47,29 +58,20 @@ android {
         }
     }
 
-<<<<<<< HEAD
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 
-=======
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-<<<<<<< HEAD
-kotlinOptions {
-    jvmTarget = "17"
-}
-=======
     kotlinOptions {
         jvmTarget = "17"
     }
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
 }
 
 dependencies {
@@ -88,7 +90,6 @@ dependencies {
     // UI lists
     implementation("androidx.recyclerview:recyclerview:1.3.2")
 
-<<<<<<< HEAD
     // Images (avatar)
     implementation("io.coil-kt:coil:2.6.0")
 
@@ -116,8 +117,4 @@ kotlin {
 val hasGoogleServices = File(projectDir, "google-services.json").exists()
 if (hasGoogleServices) {
     apply(plugin = "com.google.gms.google-services")
-=======
-    // Google Sign-In
-    implementation("com.google.android.gms:play-services-auth:21.2.0")
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
 }

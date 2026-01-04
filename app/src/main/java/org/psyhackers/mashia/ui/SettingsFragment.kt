@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.fragment.app.Fragment
 import org.psyhackers.mashia.R
+import org.psyhackers.mashia.util.DebugFileLogger
 
 class SettingsFragment : Fragment() {
     private var btnTtsPickEs: Button? = null
@@ -35,6 +36,13 @@ class SettingsFragment : Fragment() {
         keepAudio.isChecked = prefs.getBoolean(KEY_KEEP_AUDIO, false)
         keepAudio.setOnCheckedChangeListener { _, checked ->
             prefs.edit().putBoolean(KEY_KEEP_AUDIO, checked).apply()
+        }
+
+        val debugSwitch = view.findViewById<Switch>(R.id.switch_debug)
+        debugSwitch.isChecked = prefs.getBoolean(KEY_DEBUG_ENABLED, true)
+        debugSwitch.setOnCheckedChangeListener { _, v ->
+            prefs.edit().putBoolean(KEY_DEBUG_ENABLED, v).apply()
+            DebugFileLogger.setEnabled(v)
         }
 
         // Whisper settings
@@ -74,9 +82,17 @@ class SettingsFragment : Fragment() {
         micAutoSend.isChecked = prefs.getBoolean(KEY_MIC_AUTO_SEND, true)
         micAutoSend.setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(KEY_MIC_AUTO_SEND, v).apply() }
 
+        val micPreview = view.findViewById<Switch>(R.id.switch_mic_preview)
+        micPreview.isChecked = prefs.getBoolean(KEY_MIC_PREVIEW, false)
+        micPreview.setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(KEY_MIC_PREVIEW, v).apply() }
+
         val micHoldToTalk = view.findViewById<Switch>(R.id.switch_mic_hold_to_talk)
         micHoldToTalk.isChecked = prefs.getBoolean(KEY_MIC_HOLD_TO_TALK, true)
         micHoldToTalk.setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(KEY_MIC_HOLD_TO_TALK, v).apply() }
+
+        val micLeft = view.findViewById<Switch>(R.id.switch_mic_left)
+        micLeft.isChecked = prefs.getBoolean(KEY_MIC_LEFT, false)
+        micLeft.setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(KEY_MIC_LEFT, v).apply() }
 
         val ttsAutoReply = view.findViewById<Switch>(R.id.switch_tts_auto_reply)
         ttsAutoReply.isChecked = prefs.getBoolean(KEY_TTS_AUTO_REPLY, false)
@@ -308,6 +324,10 @@ class SettingsFragment : Fragment() {
         const val KEY_TTS_VOICE_HE = "tts_voice_he"
         const val KEY_TTS_VOICE_DEFAULT = "tts_voice_default"
         const val KEY_MIC_AUTO_SEND = "mic_auto_send"
+        const val KEY_MIC_PREVIEW = "mic_preview_before_send"
         const val KEY_MIC_HOLD_TO_TALK = "mic_hold_to_talk"
+        const val KEY_MIC_LEFT = "mic_left"
+        const val KEY_LIBRARY_INCLUDE_SUBFOLDERS = "library_include_subfolders"
+        const val KEY_DEBUG_ENABLED = "debug_enabled"
     }
 }

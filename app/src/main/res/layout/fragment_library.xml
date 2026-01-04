@@ -1,49 +1,275 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <SearchView
-        android:id="@+id/search_view"
+    <LinearLayout
+        android:id="@+id/library_content"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-<<<<<<< HEAD
-        android:queryHint="Search (text, #tags, folder:inbox)" />
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/folder_chips"
-=======
-        android:queryHint="Search projects" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:padding="6dp">
 
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/filter_chips"
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:singleSelection="true"
-        app:selectionRequired="true"
-        android:padding="8dp" />
+            <ImageButton
+                android:id="@+id/btn_library_close"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_btn"
+                android:padding="6dp"
+                android:contentDescription="Close"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:scaleType="centerInside" />
+        </LinearLayout>
 
-<<<<<<< HEAD
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/tag_chips"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:singleSelection="false"
-        android:padding="8dp" />
+        <LinearLayout
+            android:id="@+id/search_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?android:attr/selectableItemBackground"
+            android:background="@drawable/bg_search_row">
 
-=======
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/projects_list"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+            <SearchView
+                android:id="@+id/search_view"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:queryHint="Search (text, #tags, folder:inbox)" />
 
-</LinearLayout>
-<<<<<<< HEAD
-=======
+            <ImageView
+                android:id="@+id/icon_sort"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_btn"
+                android:padding="6dp"
+                android:contentDescription="Sort"
+                android:src="@android:drawable/ic_menu_sort_by_size"
+                android:scaleType="centerInside" />
 
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
+            <Spinner
+                android:id="@+id/spinner_sort"
+                android:layout_width="84dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@android:color/transparent"
+                android:dropDownWidth="160dp" />
+
+            <ImageButton
+                android:id="@+id/btn_sort_dir"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_btn"
+                android:padding="6dp"
+                android:contentDescription="Toggle sort direction"
+                android:src="@android:drawable/arrow_up_float"
+                android:scaleType="centerInside" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/folder_header_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Folders"
+                android:textStyle="bold"
+                android:textSize="12sp" />
+
+            <ImageButton
+                android:id="@+id/btn_folder_view_toggle"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_btn"
+                android:padding="6dp"
+                android:contentDescription="Toggle folder view"
+                android:src="@android:drawable/ic_menu_view"
+                android:scaleType="centerInside" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/folder_tree_list"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:layout_marginTop="6dp"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/folder_grid_list"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:layout_marginTop="6dp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/folder_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@android:drawable/ic_menu_agenda"
+                android:contentDescription="Folders" />
+
+            <HorizontalScrollView
+                android:id="@+id/folder_scroll"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fillViewport="true"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/folder_chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:singleSelection="false"
+                    app:selectionRequired="false"
+                    app:singleLine="true"
+                    app:chipSpacingHorizontal="4dp"
+                    app:chipSpacingVertical="2dp"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="4dp" />
+            </HorizontalScrollView>
+
+            <ImageButton
+                android:id="@+id/btn_clear_folder"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/bg_btn"
+                android:padding="4dp"
+                android:contentDescription="Clear folders"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:scaleType="centerInside"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tag_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp">
+
+            <TextView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:gravity="center"
+                android:text="#"
+                android:textStyle="bold"
+                android:textSize="14sp" />
+
+            <HorizontalScrollView
+                android:id="@+id/tag_scroll"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fillViewport="true"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/tag_chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:singleSelection="false"
+                    app:singleLine="true"
+                    app:chipSpacingHorizontal="4dp"
+                    app:chipSpacingVertical="2dp"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="4dp" />
+            </HorizontalScrollView>
+
+            <ImageButton
+                android:id="@+id/btn_clear_tag"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/bg_btn"
+                android:padding="4dp"
+                android:contentDescription="Clear tags"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:scaleType="centerInside"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/list_header_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Prompts"
+                android:textStyle="bold"
+                android:textSize="12sp" />
+
+            <ImageButton
+                android:id="@+id/btn_view_toggle"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_btn"
+                android:padding="6dp"
+                android:contentDescription="Toggle view"
+                android:src="@android:drawable/ic_menu_sort_by_size"
+                android:scaleType="centerInside" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/projects_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/btn_library_fullscreen"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="8dp"
+        android:background="@drawable/bg_btn"
+        android:padding="6dp"
+        android:contentDescription="Full screen"
+        android:src="@android:drawable/ic_menu_crop"
+        android:scaleType="centerInside" />
+</FrameLayout>

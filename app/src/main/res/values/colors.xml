@@ -1,5 +1,4 @@
 <resources>
-<<<<<<< HEAD
     <!-- Palette inspirada en el estilo solicitado -->
     <color name="purple_500">#301240</color>
     <color name="purple_700">#1E0B29</color>
@@ -11,13 +10,3 @@
     <color name="black">#000000</color>
     <color name="white">#FFFFFF</color>
 </resources>
-=======
-    <color name="purple_200">#BB86FC</color>
-    <color name="purple_500">#6200EE</color>
-    <color name="purple_700">#3700B3</color>
-    <color name="teal_200">#03DAC5</color>
-    <color name="black">#000000</color>
-    <color name="white">#FFFFFF</color>
-</resources>
-
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec

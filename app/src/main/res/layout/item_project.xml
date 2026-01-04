@@ -16,7 +16,6 @@
         android:id="@+id/project_tag"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-<<<<<<< HEAD
         android:layout_marginTop="2dp"
         android:textColor="@android:color/darker_gray" />
 
@@ -30,9 +29,3 @@
         android:textColor="@android:color/darker_gray" />
 
 </LinearLayout>
-=======
-        android:textColor="@android:color/darker_gray" />
-
-</LinearLayout>
-
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec

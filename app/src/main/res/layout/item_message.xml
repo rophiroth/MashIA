@@ -8,15 +8,16 @@
         android:id="@+id/bubble_other"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@android:color/darker_gray"
+        android:background="@drawable/bg_bubble_other"
         android:padding="10dp"
         android:layout_gravity="start"
+        android:layout_marginEnd="48dp"
         android:orientation="vertical">
         <TextView
             android:id="@+id/text_other"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-<<<<<<< HEAD
+            android:layout_height="wrap_content"
+            android:textIsSelectable="true" />
         <ImageButton
             android:id="@+id/btn_speak_other"
             android:layout_width="32dp"
@@ -29,24 +30,23 @@
             android:scaleType="centerInside"
             android:src="@android:drawable/ic_lock_silent_mode_off"
             android:tint="@android:color/white" />
-=======
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/bubble_me"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@android:color/holo_blue_dark"
+        android:background="@drawable/bg_bubble_me"
         android:padding="10dp"
         android:layout_gravity="end"
+        android:layout_marginStart="48dp"
         android:orientation="vertical">
         <TextView
             android:id="@+id/text_me"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@android:color/white" />
-<<<<<<< HEAD
+            android:textColor="@android:color/white"
+            android:textIsSelectable="true" />
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -68,19 +68,15 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:layout_marginStart="6dp"
-                android:background="@android:color/transparent"
+                android:background="@drawable/bg_btn"
                 android:contentDescription="Edit"
+                android:enabled="true"
                 android:padding="0dp"
                 android:scaleType="centerInside"
                 android:src="@android:drawable/ic_menu_edit"
+                android:alpha="1.0"
                 android:tint="@android:color/white" />
         </LinearLayout>
     </LinearLayout>
 
 </FrameLayout>
-=======
-    </LinearLayout>
-
-</FrameLayout>
-
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec

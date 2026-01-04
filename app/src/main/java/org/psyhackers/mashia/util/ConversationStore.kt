@@ -90,7 +90,7 @@ object ConversationStore {
     }
 
     fun newConversation(
-        title: String = "",
+        title: String = "New prompt",
         folder: String = "inbox",
         tags: List<String> = emptyList(),
         icon: String = "💬",
@@ -152,6 +152,10 @@ object ConversationStore {
     private fun inferTitleFrom(text: String): String {
         val t = text.trim()
         if (t.isBlank()) return ""
+        val lower = t.lowercase()
+        if (lower.startsWith("debug")) return ""
+        if (t.startsWith("??")) return ""
+        if (lower.contains("transcribiendo") || lower.contains("escuchando")) return ""
         val clean = t.replace("\n", " ").trim()
         return if (clean.length <= 44) clean else clean.take(44).trimEnd() + "…"
     }

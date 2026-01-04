@@ -1,34 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-<<<<<<< HEAD
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-=======
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:allowBackup="true"
-<<<<<<< HEAD
         android:largeHeap="true"
-=======
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-<<<<<<< HEAD
         android:theme="@style/Theme.MashIA"
         android:name="org.psyhackers.mashia.App"
         android:usesCleartextTraffic="true">
         <activity
             android:name="org.psyhackers.mashia.ui.AuthActivity"
-=======
-        android:theme="@style/Theme.MashIA">
-        <activity
-            android:name=".ui.AuthActivity"
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -36,15 +24,14 @@
             </intent-filter>
         </activity>
         <activity
-<<<<<<< HEAD
             android:name="org.psyhackers.mashia.MainActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity
+            android:name="org.psyhackers.mashia.ui.LibraryFullActivity"
+            android:exported="false" />
+        <activity
             android:name="org.psyhackers.mashia.ui.TtsVoicePickerActivity"
-=======
-            android:name=".MainActivity"
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
             android:exported="false" />
     </application>
 

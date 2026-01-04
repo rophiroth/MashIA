@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.content.res.ColorStateList
 import android.util.Log
 import android.util.Base64
 import java.util.Locale
@@ -21,8 +22,17 @@ import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import android.graphics.Color
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.MotionEvent
+import android.view.Gravity
+import android.text.Editable
+import android.text.TextWatcher
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -58,11 +68,15 @@ class ChatFragment : Fragment() {
         private const val STATE_DRAFT = "state_draft"
         private const val HISTORY_SAVE_DELAY_MS = 900L
         private const val ARG_PREFILL_TEXT = "arg_prefill_text"
+        private const val ARG_SHOW_LIBRARY = "arg_show_library"
 
-        fun newInstance(prefillText: String? = null): ChatFragment {
+        fun newInstance(prefillText: String? = null, showLibrary: Boolean = false): ChatFragment {
             return ChatFragment().apply {
-                if (!prefillText.isNullOrBlank()) {
-                    arguments = Bundle().apply { putString(ARG_PREFILL_TEXT, prefillText) }
+                if (!prefillText.isNullOrBlank() || showLibrary) {
+                    arguments = Bundle().apply {
+                        putString(ARG_PREFILL_TEXT, prefillText)
+                        if (showLibrary) putBoolean(ARG_SHOW_LIBRARY, true)
+                    }
                 }
             }
         }
@@ -76,17 +90,25 @@ class ChatFragment : Fragment() {
     private var speech: android.speech.SpeechRecognizer? = null
     private var lastVoiceIndex: Int = -1
     private var micButton: ImageButton? = null
+    private var sendButton: ImageButton? = null
+    private var inputField: EditText? = null
     private var whisperDecoding = false
     private val uiHandler = Handler(Looper.getMainLooper())
     private val saveHistoryRunnable = Runnable { saveChatHistoryNow() }
     private var conversation: ConversationStore.Conversation? = null
+    private var tabItems: List<ConversationStore.Conversation> = emptyList()
+    private var tabsAdapter: ChatTabsAdapter? = null
+    private var tabsList: RecyclerView? = null
     private var pendingImageDataUrl: String? = null
     private var pendingImageLabel: String? = null
     private var pickingImage: Boolean = false
+    private var pendingCameraAfterPermission: Boolean = false
+    private var attachMode: String = "camera"
     private var pulseUp = true
     private val TAG = "ChatFragment"
     private var appCtx: android.content.Context? = null
     private var tts: TtsPlayer? = null
+    private var autoSendButton: ImageButton? = null
     private var ttsButton: ImageButton? = null
     private var micDownAt: Long = 0L
     private var micPressWillStopOnUp: Boolean = false
@@ -125,6 +147,8 @@ class ChatFragment : Fragment() {
     private var whisperReady: Boolean = false
     private var asr: AsrEngine? = null
     private var voice: VoiceController? = null
+    private var libraryVisible: Boolean = false
+    private var openTabIds: MutableList<String> = mutableListOf()
     @Volatile private var whisperInitToken: Int = 0
     @Volatile private var whisperInitializing: Boolean = false
     private var pcmChunks = mutableListOf<ShortArray>()
@@ -151,19 +175,57 @@ class ChatFragment : Fragment() {
         val input = view.findViewById<EditText>(R.id.input_text)
         val send = view.findViewById<ImageButton>(R.id.btn_send)
         val attachFile = view.findViewById<ImageButton>(R.id.btn_attach)
-        val camera = view.findViewById<ImageButton>(R.id.btn_camera)
         val mic = view.findViewById<ImageButton>(R.id.btn_mic)
         val ttsBtn = view.findViewById<ImageButton>(R.id.btn_tts)
-        val libraryBtn = view.findViewById<ImageButton>(R.id.btn_library)
         val btnNewChat = view.findViewById<ImageButton>(R.id.btn_new_chat)
         val btnMore = view.findViewById<ImageButton>(R.id.btn_chat_more)
         val chatTitle = view.findViewById<TextView>(R.id.chat_title)
-        ttsButton = ttsBtn
+        val chatApp = view.findViewById<TextView>(R.id.chat_app_label)
+        val tabs = view.findViewById<RecyclerView>(R.id.chat_tabs)
+        val inputBar = view.findViewById<android.widget.LinearLayout>(R.id.chat_input_bar)
+        val toolbarPrompt = activity?.findViewById<TextView>(R.id.toolbar_prompt)
+        val toolbarTts = activity?.findViewById<ImageButton>(R.id.toolbar_tts)
+        val toolbarAutoSend = activity?.findViewById<ImageButton>(R.id.toolbar_autosend)
+        val toolbarMore = activity?.findViewById<ImageButton>(R.id.toolbar_more)
+        if (toolbarTts != null) {
+            ttsBtn.visibility = View.GONE
+        }
+        if (toolbarMore != null) {
+            btnMore.visibility = View.GONE
+        }
+        if (toolbarPrompt != null) {
+            chatTitle.visibility = View.GONE
+            chatApp.visibility = View.GONE
+        }
+        tabs.layoutManager = LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
+        val tabsAdapterLocal = ChatTabsAdapter(
+            emptyList(),
+            activeId = null,
+            onClick = { item -> openConversationTab(item) },
+            onClose = { item -> confirmCloseChat(item) },
+            onLongClick = { item -> showTabMenu(item) },
+        )
+        tabs.adapter = tabsAdapterLocal
+        tabsAdapter = tabsAdapterLocal
+        tabsList = tabs
+        ttsButton = toolbarTts ?: ttsBtn
+        autoSendButton = toolbarAutoSend
         micButton = mic
+        sendButton = send
+        inputField = input
         // Idle style: white icon on dark background
         try {
             mic.imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
             mic.background?.setTint(Color.parseColor("#263238"))
+        } catch (_: Throwable) {}
+
+        try {
+            val prefs = requireContext().getSharedPreferences("settings", 0)
+            val micLeft = prefs.getBoolean(SettingsFragment.KEY_MIC_LEFT, false)
+            if (micLeft) {
+                inputBar.removeView(mic)
+                inputBar.addView(mic, 0)
+            }
         } catch (_: Throwable) {}
 
         // Setup list + adapter first (avoid crashes if we log before)
@@ -192,12 +254,18 @@ class ChatFragment : Fragment() {
                 val c = ConversationStore.loadOrCreateCurrent(requireContext())
                 conversation = c
                 messages.addAll(c.messages.map { Message(it.text, it.isMe) })
-                chatTitle.text = formatConversationTitle(c)
+                setPromptTitle(c)
             } catch (_: Throwable) {}
         }
         if (chatTitle.text.isNullOrBlank()) {
-            chatTitle.text = conversation?.let { formatConversationTitle(it) } ?: "Chat"
+            conversation?.let { setPromptTitle(it) }
         }
+        try {
+            if (arguments?.getBoolean(ARG_SHOW_LIBRARY, false) == true) {
+                setLibraryVisible(true)
+                arguments?.remove(ARG_SHOW_LIBRARY)
+            }
+        } catch (_: Throwable) {}
         adapter = MessagesAdapter(
             messages,
             onSpeak = { msg -> speakText(msg.text) },
@@ -208,6 +276,8 @@ class ChatFragment : Fragment() {
         try {
             if (messages.isNotEmpty()) list.scrollToPosition(messages.lastIndex)
         } catch (_: Throwable) {}
+        refreshTabs(scrollToCurrent = true)
+        updateAutoSendButton()
         // Show last crash (if any) to avoid blind debugging
         try {
             val f = java.io.File(requireContext().filesDir, "last_crash.txt")
@@ -265,14 +335,8 @@ class ChatFragment : Fragment() {
 
         btnNewChat.setOnClickListener { confirmNewChat() }
         btnMore.setOnClickListener { showChatMoreMenu() }
-
-        libraryBtn.setOnClickListener {
-            try {
-                requireActivity().supportFragmentManager.commit {
-                    replace(R.id.fragment_container, LibraryFragment())
-                }
-            } catch (_: Throwable) {}
-        }
+        toolbarMore?.setOnClickListener { showChatMoreMenu() }
+        toolbarTts?.setOnClickListener { ttsBtn.performClick() }
 
         // Init transcription engine (local or cloud depending on settings).
         initSttEngine(whisperStatus)
@@ -305,6 +369,15 @@ class ChatFragment : Fragment() {
             sendToBackend(txt, null, imageDataUrl = img)
         }
 
+        updateSendVisibility()
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateSendVisibility()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
         attachFile.setOnClickListener {
             if (pendingImageDataUrl != null) {
                 pendingImageDataUrl = null
@@ -313,14 +386,13 @@ class ChatFragment : Fragment() {
                 try { Toast.makeText(requireContext(), "Attachment cleared", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
                 return@setOnClickListener
             }
-            pickImageFromGallery()
+            showAttachMenu(attachFile)
         }
         attachFile.setOnLongClickListener {
             pickImageFromGallery()
             true
         }
         updateAttachButton(attachFile)
-        camera.setOnClickListener { requestPermissionCompat(Manifest.permission.CAMERA) }
 
         // Mic modes (Settings): tap, tap-to-stop, hold-to-talk
         mic.setOnTouchListener { v, ev ->
@@ -466,43 +538,131 @@ class ChatFragment : Fragment() {
         messages.add(Message(text, isMe))
         adapter.notifyItemInserted(messages.lastIndex)
         try {
+            view?.findViewById<RecyclerView>(R.id.messages_list)?.scrollToPosition(messages.lastIndex)
+        } catch (_: Throwable) {}
+        try {
             val ctx = (appCtx ?: context)?.applicationContext
             if (ctx != null) {
                 val c0 = conversation ?: ConversationStore.loadOrCreateCurrent(ctx).also { conversation = it }
+                val titleBefore = c0.title
                 conversation = ConversationStore.appendMessage(c0, text, isMe)
+                if (!isMe && isUntitled(titleBefore)) {
+                    conversation?.let { maybeAutoTitle(it) }
+                }
             }
         } catch (_: Throwable) {}
         scheduleSaveChatHistory()
     }
 
-    private fun confirmNewChat() {
-        val ctx = context ?: return
-        androidx.appcompat.app.AlertDialog.Builder(ctx)
-            .setTitle("New chat")
-            .setMessage("Start a new conversation? (This one stays in Library.)")
-            .setPositiveButton("New") { _, _ ->
-                try {
-                    val app = appCtx ?: return@setPositiveButton
-                    // Persist current first
-                    saveChatHistoryNow()
-                    val created = ConversationStore.newConversation()
-                    ConversationStore.updateConversation(app, created)
-                    ConversationStore.setCurrentId(app, created.id)
-                    conversation = created
-                    messages.clear()
-                    adapter.notifyDataSetChanged()
-                    val t = view?.findViewById<TextView>(R.id.chat_title)
-                    if (t != null) t.text = formatConversationTitle(created)
-                    scheduleSaveChatHistory()
-                } catch (_: Throwable) {}
+    private fun openConversationTab(item: ConversationStore.Conversation) {
+        val app = appCtx ?: return
+        if (conversation?.id == item.id) return
+        saveChatHistoryNow()
+        ConversationStore.setCurrentId(app, item.id)
+        ensureTabOpen(item.id)
+        applyConversation(item, scrollToBottom = true)
+    }
+
+    fun openConversationFromLibrary(item: ConversationStore.Conversation) {
+        openConversationTab(item)
+    }
+
+    private fun applyConversation(next: ConversationStore.Conversation, scrollToBottom: Boolean) {
+        conversation = next
+        messages.clear()
+        messages.addAll(next.messages.map { Message(it.text, it.isMe) })
+        adapter.notifyDataSetChanged()
+        setPromptTitle(next)
+        if (scrollToBottom && messages.isNotEmpty()) {
+            try {
+                view?.findViewById<RecyclerView>(R.id.messages_list)?.scrollToPosition(messages.lastIndex)
+            } catch (_: Throwable) {}
+        }
+        tabsAdapter?.setActiveId(next.id)
+        val idx = tabItems.indexOfFirst { it.id == next.id }
+        if (idx >= 0) tabsList?.scrollToPosition(idx)
+    }
+
+    private fun refreshTabs(scrollToCurrent: Boolean = false) {
+        val ctx = appCtx ?: context ?: return
+        Thread {
+            val items = try { ConversationStore.loadAll(ctx) } catch (_: Throwable) { emptyList() }
+            view?.post {
+                val currentId = conversation?.id
+                val openIds = loadOpenTabIds(ctx)
+                if (currentId != null && !openIds.contains(currentId)) {
+                    openIds.add(0, currentId)
+                }
+                if (openIds.isEmpty() && items.isNotEmpty()) {
+                    openIds.add(items.first().id)
+                }
+                // Keep only existing conversations, preserve order.
+                val byId = items.associateBy { it.id }
+                val filtered = openIds.mapNotNull { byId[it] }
+                openTabIds = openIds.filter { byId.containsKey(it) }.toMutableList()
+                saveOpenTabIds(ctx, openTabIds)
+                tabItems = filtered
+                tabsAdapter?.update(filtered, conversation?.id)
+                if (scrollToCurrent) {
+                    val idx = filtered.indexOfFirst { it.id == conversation?.id }
+                    if (idx >= 0) tabsList?.scrollToPosition(idx)
+                }
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        }.start()
+    }
+
+    private fun loadOpenTabIds(ctx: Context): MutableList<String> {
+        try {
+            val prefs = ctx.getSharedPreferences("settings", 0)
+            val raw = prefs.getString("open_tab_ids", "").orEmpty()
+            val ids = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            return ids.toMutableList()
+        } catch (_: Throwable) {}
+        return mutableListOf()
+    }
+
+    private fun saveOpenTabIds(ctx: Context, ids: List<String>) {
+        try {
+            val prefs = ctx.getSharedPreferences("settings", 0)
+            prefs.edit().putString("open_tab_ids", ids.joinToString(",")).apply()
+        } catch (_: Throwable) {}
+    }
+
+    private fun ensureTabOpen(id: String) {
+        val ctx = appCtx ?: context ?: return
+        val ids = loadOpenTabIds(ctx)
+        if (!ids.contains(id)) {
+            ids.add(0, id)
+            saveOpenTabIds(ctx, ids)
+            openTabIds = ids.toMutableList()
+        }
+    }
+
+    private fun closeTabId(id: String) {
+        val ctx = appCtx ?: context ?: return
+        val ids = loadOpenTabIds(ctx).filter { it != id }
+        saveOpenTabIds(ctx, ids)
+        openTabIds = ids.toMutableList()
+    }
+
+    private fun confirmNewChat() {
+        try {
+            val app = appCtx ?: return
+            // Persist current first
+            saveChatHistoryNow()
+            val created = ConversationStore.newConversation()
+            ConversationStore.updateConversation(app, created)
+            ConversationStore.setCurrentId(app, created.id)
+            ensureTabOpen(created.id)
+            applyConversation(created, scrollToBottom = false)
+            refreshTabs(scrollToCurrent = true)
+            scheduleSaveChatHistory()
+        } catch (_: Throwable) {}
     }
 
     private fun showChatMoreMenu() {
         val ctx = context ?: return
-        val opts = arrayOf("Edit chat (folder/tags/icon)", "Library", "Settings", "Share chat", "Delete chat")
+        val opts = arrayOf("Edit chat (folder/tags/icon)", "Settings", "Share chat", "Delete chat")
         androidx.appcompat.app.AlertDialog.Builder(ctx)
             .setTitle("Chat")
             .setItems(opts) { _, which ->
@@ -511,97 +671,358 @@ class ChatFragment : Fragment() {
                     1 -> {
                         try {
                             requireActivity().supportFragmentManager.commit {
-                                replace(R.id.fragment_container, LibraryFragment())
-                            }
-                        } catch (_: Throwable) {}
-                    }
-                    2 -> {
-                        try {
-                            requireActivity().supportFragmentManager.commit {
                                 replace(R.id.fragment_container, SettingsFragment())
                             }
                         } catch (_: Throwable) {}
                     }
-                    3 -> shareChatToClipboard()
-                    4 -> confirmDeleteChat()
+                    2 -> shareChatToClipboard()
+                    3 -> confirmDeleteChat()
                 }
             }
             .show()
     }
 
-    private fun showEditChatDialog() {
+    fun setLibraryVisible(visible: Boolean) {
+        val container = view?.findViewById<View>(R.id.chat_library_container) ?: return
+        val list = view?.findViewById<View>(R.id.messages_list)
+        libraryVisible = visible
+        container.visibility = if (visible) View.VISIBLE else View.GONE
+        list?.visibility = if (visible) View.GONE else View.VISIBLE
+        if (visible) {
+            val tag = "library_panel"
+            val fm = childFragmentManager
+            val existing = fm.findFragmentByTag(tag)
+            if (existing == null) {
+                fm.commit {
+                    replace(R.id.chat_library_container, LibraryFragment(), tag)
+                }
+            }
+        }
+    }
+
+    fun toggleLibraryVisible() {
+        setLibraryVisible(!libraryVisible)
+    }
+
+    private fun confirmCloseChat(item: ConversationStore.Conversation) {
         val ctx = context ?: return
-        val app = appCtx ?: return
-        val c0 = conversation ?: ConversationStore.loadOrCreateCurrent(app).also { conversation = it }
-
-        val layout = android.widget.LinearLayout(ctx).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(48, 24, 48, 0)
-        }
-        val inputTitle = EditText(ctx).apply { hint = "Title"; setText(c0.title) }
-        val inputFolder = EditText(ctx).apply { hint = "Folder"; setText(c0.folder) }
-        val inputTags = EditText(ctx).apply { hint = "Tags (comma separated)"; setText(c0.tags.joinToString(", ")) }
-        val inputIcon = EditText(ctx).apply { hint = "Icon (emoji)"; setText(c0.icon.ifBlank { "💬" }) }
-        val inputColor = EditText(ctx).apply { hint = "Color hex (e.g. FF1565C0)"; setText(Integer.toHexString(c0.color)) }
-
-        val btnPickIcon = android.widget.Button(ctx).apply {
-            text = "Pick icon"
-            setOnClickListener {
-                val icons = arrayOf("💬", "📚", "🧠", "🧘", "💼", "🛠️", "❤️", "⭐", "🔥", "✅")
-                androidx.appcompat.app.AlertDialog.Builder(ctx)
-                    .setTitle("Icon")
-                    .setItems(icons) { _, which -> inputIcon.setText(icons[which]) }
-                    .show()
-            }
-        }
-        val btnPickColor = android.widget.Button(ctx).apply {
-            text = "Pick color"
-            setOnClickListener {
-                val labels = arrayOf("Blue", "Green", "Orange", "Red", "Purple", "Gray")
-                val values = arrayOf("FF1565C0", "FF2E7D32", "FFF57C00", "FFC62828", "FF6A1B9A", "FF37474F")
-                androidx.appcompat.app.AlertDialog.Builder(ctx)
-                    .setTitle("Color")
-                    .setItems(labels) { _, which -> inputColor.setText(values[which]) }
-                    .show()
-            }
-        }
-
-        layout.addView(inputTitle)
-        layout.addView(inputFolder)
-        layout.addView(inputTags)
-        layout.addView(inputIcon)
-        layout.addView(btnPickIcon)
-        layout.addView(inputColor)
-        layout.addView(btnPickColor)
-
         androidx.appcompat.app.AlertDialog.Builder(ctx)
-            .setTitle("Edit chat")
-            .setView(layout)
-            .setPositiveButton("Save") { _, _ ->
+            .setTitle("Close chat")
+            .setMessage("Close this chat? It will stay in Library.")
+            .setPositiveButton("Close") { _, _ ->
                 try {
-                    val hex = inputColor.text?.toString()?.trim().orEmpty().trimStart('#')
-                    val color = hex.toLongOrNull(16)?.toInt()
-                    val updated = ConversationStore.updateMeta(
-                        c0,
-                        title = inputTitle.text?.toString(),
-                        folder = inputFolder.text?.toString(),
-                        tagsCsv = inputTags.text?.toString(),
-                        icon = inputIcon.text?.toString(),
-                        color = color,
-                    )
-                    conversation = updated
-                    ConversationStore.updateConversation(app, updated)
-                    view?.findViewById<TextView>(R.id.chat_title)?.text = formatConversationTitle(updated)
+                    val app = appCtx ?: return@setPositiveButton
+                    closeTabId(item.id)
+                    if (conversation?.id == item.id) {
+                        val all = try { ConversationStore.loadAll(app) } catch (_: Throwable) { emptyList() }
+                        val byId = all.associateBy { it.id }
+                        val next = openTabIds.firstOrNull()?.let { byId[it] }
+                        if (next != null) {
+                            ConversationStore.setCurrentId(app, next.id)
+                            applyConversation(next, scrollToBottom = true)
+                        } else if (all.isNotEmpty()) {
+                            val pick = all.first()
+                            ConversationStore.setCurrentId(app, pick.id)
+                            ensureTabOpen(pick.id)
+                            applyConversation(pick, scrollToBottom = true)
+                        } else {
+                            confirmNewChat()
+                        }
+                    }
+                    refreshTabs(scrollToCurrent = true)
                 } catch (_: Throwable) {}
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
-    private fun confirmDeleteChat() {
+    private fun showTabMenu(item: ConversationStore.Conversation) {
+        val ctx = context ?: return
+        val opts = arrayOf("AI title", "Edit chat", "Close chat")
+        androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setTitle("Tab")
+            .setItems(opts) { _, which ->
+                when (which) {
+                    0 -> confirmAiTitle(item)
+                    1 -> showEditChatDialog(item)
+                    2 -> confirmCloseChat(item)
+                }
+            }
+            .show()
+    }
+
+    private fun showEditChatDialog(item: ConversationStore.Conversation? = null) {
         val ctx = context ?: return
         val app = appCtx ?: return
-        val c0 = conversation ?: return
+        val c0 = item ?: (conversation ?: ConversationStore.loadOrCreateCurrent(app).also { conversation = it })
+
+        val layout = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 0)
+        }
+        var selectedIcon = c0.icon.ifBlank { "💬" }
+        val inputTitle = EditText(ctx).apply { hint = "Title"; setText(normalizeTitle(c0.title)) }
+        val iconButton = TextView(ctx).apply {
+            text = selectedIcon
+            textSize = 22f
+            setPadding(8, 4, 12, 4)
+            setOnClickListener {
+                showIconPicker(ctx, selectedIcon) { picked ->
+                    selectedIcon = picked
+                    text = picked
+                }
+            }
+        }
+        val titleRow = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        titleRow.addView(iconButton)
+        titleRow.addView(
+            inputTitle,
+            android.widget.LinearLayout.LayoutParams(
+                0,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        )
+        var folderPath = c0.folder.trim().ifBlank { "inbox" }
+        val folderRow = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(0, 8, 0, 8)
+        }
+        val folderLabel = TextView(ctx).apply {
+            text = folderPath
+            setPadding(12, 6, 12, 6)
+            setBackgroundResource(R.drawable.bg_btn)
+        }
+        val btnSetFolder = android.widget.Button(ctx).apply {
+            text = "Set folder"
+            setOnClickListener {
+                val allFolders =
+                    try {
+                        ConversationStore.loadAll(app).map { it.folder.trim().ifBlank { "inbox" } }
+                            .distinct()
+                            .sorted()
+                    } catch (_: Throwable) { emptyList() }
+                val items = mutableListOf("Inbox", "New folder…").apply { addAll(allFolders) }.distinct()
+                androidx.appcompat.app.AlertDialog.Builder(ctx)
+                    .setTitle("Set folder")
+                    .setItems(items.toTypedArray()) { _, which ->
+                        val pick = items[which]
+                        if (pick == "New folder…") {
+                            val input = EditText(ctx).apply { hint = "Folder"; setText(folderPath) }
+                            androidx.appcompat.app.AlertDialog.Builder(ctx)
+                                .setTitle("New folder")
+                                .setView(input)
+                                .setPositiveButton("Set") { _, _ ->
+                                    val v = input.text?.toString()?.trim().orEmpty()
+                                    folderPath = if (v.isBlank() || v.equals("inbox", true)) "inbox" else v
+                                    folderLabel.text = folderPath
+                                }
+                                .setNegativeButton("Cancel", null)
+                                .show()
+                        } else {
+                            folderPath = if (pick.equals("inbox", true)) "inbox" else pick
+                            folderLabel.text = folderPath
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+        val btnAddSub = android.widget.Button(ctx).apply {
+            text = "+"
+            setOnClickListener {
+                val input = EditText(ctx).apply { hint = "Subfolder" }
+                androidx.appcompat.app.AlertDialog.Builder(ctx)
+                    .setTitle("Add subfolder")
+                    .setView(input)
+                    .setPositiveButton("Add") { _, _ ->
+                        val v = input.text?.toString()?.trim().orEmpty()
+                        if (v.isNotBlank()) {
+                            folderPath = folderPath.trimEnd('/') + "/" + v
+                            folderLabel.text = folderPath
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+        folderRow.addView(folderLabel)
+        folderRow.addView(btnSetFolder)
+        folderRow.addView(btnAddSub)
+
+        val tags = c0.tags.toMutableList()
+        val tagsGroup = ChipGroup(ctx).apply {
+            isSingleSelection = false
+            setPadding(0, 8, 0, 8)
+        }
+        fun renderTags() {
+            tagsGroup.removeAllViews()
+            for (t in tags) {
+                val chip = Chip(ctx)
+                chip.text = t
+                chip.isCloseIconVisible = true
+                chip.setOnCloseIconClickListener {
+                    tags.remove(t)
+                    renderTags()
+                }
+                tagsGroup.addView(chip)
+            }
+        }
+        fun addTags(raw: String) {
+            val pieces = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            for (p in pieces) {
+                if (tags.none { it.equals(p, ignoreCase = true) }) {
+                    tags.add(p)
+                }
+            }
+            renderTags()
+        }
+        val existingTags = try {
+            ConversationStore.loadAll(app)
+                .flatMap { it.tags }
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sortedBy { it.lowercase() }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+        val btnAddTag = android.widget.Button(ctx).apply {
+            text = "Add tag"
+            setOnClickListener {
+                var dialog: androidx.appcompat.app.AlertDialog? = null
+                val wrap = android.widget.LinearLayout(ctx).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    setPadding(36, 12, 36, 0)
+                }
+                val input = android.widget.AutoCompleteTextView(ctx).apply {
+                    hint = "tag, tag2"
+                    if (existingTags.isNotEmpty()) {
+                        setAdapter(
+                            android.widget.ArrayAdapter(
+                                ctx,
+                                android.R.layout.simple_dropdown_item_1line,
+                                existingTags
+                            )
+                        )
+                        threshold = 1
+                        setOnClickListener { showDropDown() }
+                    }
+                }
+                wrap.addView(input)
+                if (existingTags.isNotEmpty()) {
+                    val label = TextView(ctx).apply {
+                        text = "Existing"
+                        setPadding(0, 12, 0, 6)
+                    }
+                    val group = ChipGroup(ctx).apply {
+                        isSingleSelection = false
+                    }
+                    for (t in existingTags) {
+                        val chip = Chip(ctx).apply {
+                            text = t
+                            setOnClickListener {
+                                addTags(t)
+                                try { dialog?.dismiss() } catch (_: Throwable) {}
+                            }
+                        }
+                        group.addView(chip)
+                    }
+                    wrap.addView(label)
+                    wrap.addView(group)
+                }
+                dialog = androidx.appcompat.app.AlertDialog.Builder(ctx)
+                    .setTitle("Add tag")
+                    .setView(wrap)
+                    .setPositiveButton("Add") { _, _ ->
+                        addTags(input.text?.toString().orEmpty())
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+        renderTags()
+        var selectedColor = c0.color
+        val colorRow = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(0, 8, 0, 8)
+        }
+        val colorDot = View(ctx).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(24, 24)
+        }
+        val colorLabel = TextView(ctx).apply {
+            text = colorNameFor(selectedColor)
+            setPadding(12, 0, 0, 0)
+        }
+        colorRow.addView(colorDot)
+        colorRow.addView(colorLabel)
+        updateColorDot(colorDot, selectedColor)
+
+        val btnAiTitle = android.widget.Button(ctx).apply {
+            text = "AI title"
+            setOnClickListener {
+                confirmAiTitle(c0)
+            }
+        }
+        val btnPickColor = android.widget.Button(ctx).apply {
+            text = "Pick color"
+            setOnClickListener {
+                showColorPicker(ctx, selectedColor) { picked ->
+                    selectedColor = picked.value
+                    updateColorDot(colorDot, selectedColor)
+                    colorLabel.text = picked.name
+                }
+            }
+        }
+
+        layout.addView(titleRow)
+        layout.addView(folderRow)
+        layout.addView(tagsGroup)
+        layout.addView(btnAddTag)
+        layout.addView(colorRow)
+        layout.addView(btnPickColor)
+        layout.addView(btnAiTitle)
+
+        androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setTitle("Edit chat")
+            .setView(layout)
+            .setPositiveButton("Save") { _, _ ->
+                try {
+                    val color = selectedColor
+                    val safeTitle = normalizeTitle(inputTitle.text?.toString().orEmpty())
+                    val updated = ConversationStore.updateMeta(
+                        c0,
+                        title = safeTitle,
+                        folder = folderPath,
+                        tagsCsv = tags.joinToString(", "),
+                        icon = selectedIcon,
+                        color = color,
+                    )
+                    ConversationStore.updateConversation(app, updated)
+                    if (conversation?.id == updated.id) {
+                        conversation = updated
+                    setPromptTitle(updated)
+                    }
+                    refreshTabs(scrollToCurrent = true)
+                    try {
+                        val lib = activity?.supportFragmentManager?.findFragmentById(R.id.drawer_library_container)
+                        if (lib is LibraryFragment) lib.refreshFromStore()
+                    } catch (_: Throwable) {}
+                } catch (_: Throwable) {}
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmDeleteChat(item: ConversationStore.Conversation? = null) {
+        val ctx = context ?: return
+        val app = appCtx ?: return
+        val c0 = item ?: conversation ?: return
         androidx.appcompat.app.AlertDialog.Builder(ctx)
             .setTitle("Delete chat")
             .setMessage("Delete this conversation from Library?")
@@ -609,11 +1030,8 @@ class ChatFragment : Fragment() {
                 try {
                     ConversationStore.deleteConversation(app, c0.id)
                     val next = ConversationStore.loadOrCreateCurrent(app)
-                    conversation = next
-                    messages.clear()
-                    messages.addAll(next.messages.map { Message(it.text, it.isMe) })
-                    adapter.notifyDataSetChanged()
-                    view?.findViewById<TextView>(R.id.chat_title)?.text = formatConversationTitle(next)
+                    applyConversation(next, scrollToBottom = true)
+                    refreshTabs(scrollToCurrent = true)
                 } catch (_: Throwable) {}
             }
             .setNegativeButton("Cancel", null)
@@ -645,15 +1063,194 @@ class ChatFragment : Fragment() {
         return "$icon  $title  •  $folder"
     }
 
+    private fun formatConversationTitleDisplay(c: ConversationStore.Conversation): CharSequence {
+        val icon = c.icon.trim().ifBlank { "??" }
+        val title = c.title.trim().ifBlank { "Chat" }
+        val dot = "\u25CF "
+        val text = dot + icon + "  " + title
+        val out = SpannableStringBuilder(text)
+        try {
+            out.setSpan(ForegroundColorSpan(c.color), 0, dot.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } catch (_: Throwable) {}
+        return out
+    }
+
+    private fun setPromptTitle(c: ConversationStore.Conversation) {
+        try {
+            val safe = normalizeTitle(c.title)
+            if (safe != c.title) {
+                val app = appCtx
+                if (app != null) {
+                    val updated = ConversationStore.updateMeta(c, title = safe)
+                    conversation = updated
+                    ConversationStore.updateConversation(app, updated)
+                }
+            }
+            val updatedTitle = safe
+            view?.findViewById<TextView>(R.id.chat_title)?.text = formatConversationTitleDisplay(c.copy(title = updatedTitle))
+            val toolbarTitle = activity?.findViewById<TextView>(R.id.toolbar_prompt)
+            toolbarTitle?.text = updatedTitle
+        } catch (_: Throwable) {}
+    }
+
+    private fun normalizeTitle(raw: String): String {
+        val t = raw.trim()
+        if (t.isBlank()) return "New prompt"
+        val lower = t.lowercase()
+        if (t.startsWith("??")) return "New prompt"
+        if (lower.contains("transcribiendo") || lower.contains("escuchando")) return "New prompt"
+        if (lower.contains("transcribe")) return "New prompt"
+        return t
+    }
+
+    private fun confirmAiTitle(item: ConversationStore.Conversation?) {
+        val ctx = context ?: return
+        val target = item ?: conversation ?: return
+        androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setTitle("AI title")
+            .setMessage("Generate a new title with AI?")
+            .setPositiveButton("Generate") { _, _ -> generateAiTitle(target) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun generateAiTitle(target: ConversationStore.Conversation) {
+        val seed = buildTitleSeed(target)
+        if (seed.isNullOrBlank()) {
+            try { Toast.makeText(requireContext(), "No text to title yet", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+            return
+        }
+        Thread {
+            val title = generateTitleFromText(seed) ?: compactTitle(seed, seed)
+            if (title.isBlank()) return@Thread
+            uiHandler.post {
+                val app = appCtx ?: return@post
+                val updated = ConversationStore.updateMeta(target, title = normalizeTitle(title))
+                ConversationStore.updateConversation(app, updated)
+                if (conversation?.id == updated.id) {
+                    conversation = updated
+                    setPromptTitle(updated)
+                }
+                refreshTabs(scrollToCurrent = true)
+            }
+        }.start()
+    }
+
+    private fun buildTitleSeed(target: ConversationStore.Conversation): String? {
+        val msgs = target.messages
+            .map { it.text.trim() to it.isMe }
+            .filter { it.first.isNotBlank() }
+            .filterNot { it.first.startsWith("??") }
+            .filterNot { it.first.contains("transcribiendo", ignoreCase = true) }
+            .filterNot { it.first.contains("escuchando", ignoreCase = true) }
+        if (msgs.isEmpty()) return null
+        val sb = StringBuilder()
+        for ((text, isMe) in msgs.take(12)) {
+            val clean = text.replace(Regex("\\s+"), " ").trim()
+            if (clean.isBlank()) continue
+            sb.append(if (isMe) "User: " else "AI: ")
+            sb.append(clean)
+            sb.append('\n')
+            if (sb.length > 1400) break
+        }
+        return sb.toString().trim()
+    }
+
+    private fun isUntitled(raw: String): Boolean {
+        val t = raw.trim().lowercase(Locale.ROOT)
+        return t.isBlank() || t == "new prompt" || t == "chat"
+    }
+
+    private fun updateSendVisibility() {
+        val send = sendButton ?: return
+        val input = inputField
+        val hasText = input?.text?.toString()?.trim()?.isNotEmpty() == true
+        val hasAttachment = !pendingImageDataUrl.isNullOrBlank()
+        val show = hasText || hasAttachment
+        send.isEnabled = show
+        send.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
     private fun updateAttachButton(btn: ImageButton) {
         val attached = pendingImageDataUrl != null
         btn.alpha = if (attached) 1.0f else 0.8f
-        btn.setImageResource(if (attached) android.R.drawable.ic_menu_close_clear_cancel else android.R.drawable.ic_menu_add)
+        val icon =
+            if (attached) android.R.drawable.ic_menu_close_clear_cancel
+            else android.R.drawable.ic_menu_add
+        btn.setImageResource(icon)
         btn.contentDescription = if (attached) "Clear attachment" else "Attach"
         try {
             btn.background?.setTint(if (attached) Color.parseColor("#2E7D32") else Color.parseColor("#263238"))
             btn.imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
         } catch (_: Throwable) {}
+        updateSendVisibility()
+    }
+
+    private fun showAttachMenu(anchor: View) {
+        val ctx = context ?: return
+        val menu = android.widget.PopupMenu(ctx, anchor)
+        menu.menu.add(0, 1, 0, "Camera").setIcon(android.R.drawable.ic_menu_camera)
+        menu.menu.add(0, 2, 1, "Gallery").setIcon(android.R.drawable.ic_menu_gallery)
+        menu.menu.add(0, 3, 2, "File").setIcon(android.R.drawable.ic_menu_save)
+        try {
+            val f = menu.javaClass.getDeclaredField("mPopup")
+            f.isAccessible = true
+            val helper = f.get(menu)
+            val setIcons = helper.javaClass.getDeclaredMethod("setForceShowIcon", Boolean::class.javaPrimitiveType)
+            setIcons.invoke(helper, true)
+        } catch (_: Throwable) {}
+        menu.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> {
+                    attachMode = "camera"
+                    updateAttachButton(anchor as ImageButton)
+                    startCameraCapture()
+                }
+                2 -> {
+                    attachMode = "gallery"
+                    updateAttachButton(anchor as ImageButton)
+                    pickImageFromGallery()
+                }
+                3 -> {
+                    attachMode = "file"
+                    updateAttachButton(anchor as ImageButton)
+                    pickFileFromStorage()
+                }
+            }
+            true
+        }
+        menu.show()
+    }
+
+    private fun startCameraCapture() {
+        val ctx = context ?: return
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            pendingCameraAfterPermission = true
+            requestPermissionCompat(Manifest.permission.CAMERA)
+            return
+        }
+        launchCameraIntent()
+    }
+
+    private fun launchCameraIntent() {
+        try {
+            val intent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+            startActivityForResult(intent, REQ_CAMERA_CAPTURE)
+        } catch (t: Throwable) {
+            try { Toast.makeText(requireContext(), "Camera failed: ${t.message}", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+        }
+    }
+
+    private fun pickFileFromStorage() {
+        try {
+            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                type = "*/*"
+                addCategory(Intent.CATEGORY_OPENABLE)
+            }
+            startActivityForResult(Intent.createChooser(intent, "Pick file"), REQ_FILE_PICK)
+        } catch (t: Throwable) {
+            try { Toast.makeText(requireContext(), "Pick failed: ${t.message}", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+        }
     }
 
     private fun pickImageFromGallery() {
@@ -673,6 +1270,47 @@ class ChatFragment : Fragment() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_CAMERA_CAPTURE) {
+            val bmp = data?.extras?.get("data") as? Bitmap
+            if (bmp == null) {
+                try { Toast.makeText(requireContext(), "Camera canceled", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+                return
+            }
+            Thread {
+                val encoded = try { encodeBitmapAsDataUrl(bmp) } catch (_: Throwable) { null }
+                view?.post {
+                    if (encoded.isNullOrBlank()) {
+                        try { Toast.makeText(requireContext(), "Couldn't attach photo", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+                        return@post
+                    }
+                    pendingImageDataUrl = encoded
+                    pendingImageLabel = "camera"
+                    val btn = view?.findViewById<ImageButton>(R.id.btn_attach)
+                    if (btn != null) updateAttachButton(btn)
+                    try { Toast.makeText(requireContext(), "Photo attached", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+                }
+            }.start()
+            return
+        }
+        if (requestCode == REQ_FILE_PICK) {
+            val uri = data?.data ?: return
+            Thread {
+                val encoded = try { encodeFileAsDataUrl(uri) } catch (_: Throwable) { null }
+                val name = try { queryFileName(uri) } catch (_: Throwable) { null }
+                view?.post {
+                    if (encoded.isNullOrBlank()) {
+                        try { Toast.makeText(requireContext(), "Couldn't attach file", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+                        return@post
+                    }
+                    pendingImageDataUrl = encoded
+                    pendingImageLabel = name ?: "file"
+                    val btn = view?.findViewById<ImageButton>(R.id.btn_attach)
+                    if (btn != null) updateAttachButton(btn)
+                    try { Toast.makeText(requireContext(), "File attached", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+                }
+            }.start()
+            return
+        }
         if (requestCode != 2202) return
         pickingImage = false
         val uri = data?.data ?: return
@@ -720,23 +1358,81 @@ class ChatFragment : Fragment() {
         return "data:image/jpeg;base64,$b64"
     }
 
+    private fun encodeFileAsDataUrl(uri: Uri): String? {
+        val ctx = context ?: return null
+        val cr = ctx.contentResolver
+        val mime = cr.getType(uri) ?: "application/octet-stream"
+        val bytes = cr.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        if (bytes.isEmpty()) return null
+        if (bytes.size > 2_500_000) return null
+        val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        return "data:$mime;base64,$b64"
+    }
+
+    private fun queryFileName(uri: Uri): String? {
+        val ctx = context ?: return null
+        val cr = ctx.contentResolver
+        val cursor = cr.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val idx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0) return it.getString(idx)
+            }
+        }
+        return null
+    }
+
+    private fun encodeBitmapAsDataUrl(bmp: Bitmap): String? {
+        val maxDim = 1024
+        val w = bmp.width
+        val h = bmp.height
+        val scale = if (w >= h) (maxDim.toFloat() / w.toFloat()) else (maxDim.toFloat() / h.toFloat())
+        val scaled =
+            if (scale >= 1f) bmp
+            else Bitmap.createScaledBitmap(
+                bmp,
+                (w * scale).toInt().coerceAtLeast(1),
+                (h * scale).toInt().coerceAtLeast(1),
+                true
+            )
+        val out = java.io.ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+        val jpeg = out.toByteArray()
+        if (jpeg.size > 2_500_000) return null
+        val b64 = Base64.encodeToString(jpeg, Base64.NO_WRAP)
+        return "data:image/jpeg;base64,$b64"
+    }
+
     private fun showEditMessageDialog(position: Int) {
         val ctx = context ?: return
         if (position !in messages.indices) return
         val m = messages[position]
         if (!m.isMe) return
         val old = m.text.trim()
-        if (old.isBlank() || old.startsWith("🎤") || old.startsWith("DEBUG", ignoreCase = true)) return
+        if (old.isBlank()) return
 
         val input = EditText(ctx).apply {
             setText(old)
             setSelection(text?.length ?: 0)
         }
 
+        val note = TextView(ctx).apply {
+            text = "Re-runs from here."
+            textSize = 10f
+            setTextColor(Color.parseColor("#78909C"))
+            setPadding(0, 6, 0, 0)
+            alpha = 0.8f
+        }
+        val wrap = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        wrap.addView(input)
+        wrap.addView(note)
+
         androidx.appcompat.app.AlertDialog.Builder(ctx)
             .setTitle("Edit message")
-            .setView(input)
-            .setMessage("This will re-run the chat from this point (messages after it will be replaced).")
+            .setView(wrap)
+            .setMessage(null)
             .setPositiveButton("Update & resend") { _, _ ->
                 val updated = input.text?.toString()?.trim().orEmpty()
                 if (updated.isBlank()) return@setPositiveButton
@@ -779,6 +1475,7 @@ class ChatFragment : Fragment() {
             val ctx = appCtx ?: return
             val c = syncConversationFromUi(ctx) ?: return
             ConversationStore.updateConversation(ctx, c)
+            refreshTabs(scrollToCurrent = false)
         } catch (_: Throwable) {}
     }
 
@@ -857,10 +1554,7 @@ class ChatFragment : Fragment() {
                         // Fallback a OpenAI directo si hay clave
                         Log.w(TAG, "Backend error ${resp.code}: ${raw.take(200)} - intentando OpenAI directo")
                         Handler(Looper.getMainLooper()).post {
-                            addMessage(
-                                "DEBUG backend_error\nurl=$url\nstatus=${resp.code}\nbody=${raw.take(200)}",
-                                false
-                            )
+                            addDebug("backend_error url=$url status=${resp.code} body=${raw.take(200)}")
                         }
                         callOpenAIAndPost(userText, vaultId, imageDataUrl)
                     }
@@ -868,7 +1562,7 @@ class ChatFragment : Fragment() {
             } catch (e: Exception) {
                 Log.e(TAG, "Backend request failed, intentando OpenAI directo", e)
                 Handler(Looper.getMainLooper()).post {
-                    addMessage("DEBUG backend_exception\nurl=$url\nerr=${e.message}", false)
+                    addDebug("backend_exception url=$url err=${e.message}")
                 }
                 callOpenAIAndPost(userText, vaultId, imageDataUrl)
             }
@@ -877,6 +1571,135 @@ class ChatFragment : Fragment() {
 
     private fun sendDirectToOpenAI(userText: String, vaultId: String?, imageDataUrl: String?) {
         Thread { callOpenAIAndPost(userText, vaultId, imageDataUrl) }.start()
+    }
+
+    private fun maybeAutoTitle(c0: ConversationStore.Conversation) {
+        val ctx = appCtx ?: context ?: return
+        val prefs = ctx.getSharedPreferences("settings", 0)
+        val key = "title_generated_" + c0.id
+        if (prefs.getBoolean(key, false)) return
+        val seed = buildTitleSeed(c0) ?: return
+        if (seed.length < 6) return
+        prefs.edit().putBoolean(key, true).apply()
+        Thread {
+            val title = generateTitleFromText(seed) ?: compactTitle(seed, seed)
+            if (title.isBlank()) return@Thread
+            uiHandler.post {
+                val app = appCtx ?: return@post
+                val current = conversation
+                if (current == null || current.id != c0.id) return@post
+                val updated = ConversationStore.updateMeta(current, title = title)
+                conversation = updated
+                ConversationStore.updateConversation(app, updated)
+                setPromptTitle(updated)
+                refreshTabs(scrollToCurrent = true)
+            }
+        }.start()
+    }
+
+    private fun generateTitleFromText(seed: String): String? {
+        val ctx = appCtx ?: context ?: return null
+        val groqKey = try { ctx.getString(R.string.groq_api_key).trim() } catch (_: Throwable) { "" }
+        val openaiKey = try { ctx.getString(R.string.openai_api_key).trim() } catch (_: Throwable) { "" }
+        val useGroq = groqKey.isNotBlank()
+        val key = if (useGroq) groqKey else openaiKey
+        if (key.isBlank()) return null
+        val base = if (useGroq) ctx.getString(R.string.ai_base_groq) else ctx.getString(R.string.ai_base_openai)
+        val prefs = try { ctx.getSharedPreferences("settings", 0) } catch (_: Throwable) { null }
+        val model = if (useGroq) {
+            prefs?.getString(SettingsFragment.KEY_GROQ_CHAT_MODEL, ctx.getString(R.string.groq_model))
+                ?.trim()
+                .orEmpty()
+                .ifBlank { ctx.getString(R.string.groq_model) }
+        } else {
+            "gpt-4o-mini"
+        }
+        val url = base.trimEnd('/') + "/v1/chat/completions"
+        val prompt = "Return only a 2-4 word keyword title. Use key nouns only, no articles, no punctuation, no quotes, no extra text."
+        val payload = JSONObject().apply {
+            put("model", model)
+            put("messages", JSONArray().apply {
+                put(JSONObject().put("role", "system").put("content", prompt))
+                put(JSONObject().put("role", "user").put("content", seed))
+            })
+        }.toString()
+        return try {
+            val body = payload.toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $key")
+                .post(body)
+                .build()
+            http.newCall(req).execute().use { resp ->
+                val raw = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    addDebug("title api_error status=${resp.code}")
+                    return compactTitle(seed, seed)
+                }
+                val content =
+                    try {
+                        val root = JSONObject(raw)
+                        val choices = root.optJSONArray("choices")
+                        val first = choices?.optJSONObject(0)
+                        first?.optJSONObject("message")?.optString("content").orEmpty()
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                val clean = content.trim().trim('"', '\'', '`').replace(Regex("\\s+"), " ")
+                if (isRefusal(clean)) return compactTitle(seed, seed)
+                val compact = normalizeAiTitle(clean, seed)
+                if (compact.length > 44) compact.take(44).trimEnd() else compact
+            }
+        } catch (t: Throwable) {
+            addDebug("title api_exception err=${t.message}")
+            compactTitle(seed, seed)
+        }
+    }
+
+    private fun isRefusal(text: String): Boolean {
+        val t = text.lowercase(Locale.ROOT)
+        return t.contains("cannot") ||
+            t.contains("can't") ||
+            t.contains("cannot comply") ||
+            t.contains("i can't") ||
+            t.contains("as an ai") ||
+            t.contains("can't help")
+    }
+
+    private fun normalizeAiTitle(raw: String, seed: String): String {
+        var text = raw.trim()
+        if (text.contains('\n')) {
+            text = text.lineSequence().firstOrNull().orEmpty().trim()
+        }
+        text = text.replace(Regex("^(title|titulo|prompt|chat)\\s*[:\\-]\\s*", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("^(title|titulo|prompt|chat)\\s+", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("[\"'`]+"), "")
+        text = text.replace(Regex("\\s+"), " ").trim()
+        val compact = compactTitle(text, seed)
+        val lower = compact.lowercase(Locale.ROOT)
+        if (lower.contains("transcribiendo") || lower.contains("escuchando") || lower.contains("transcribe")) {
+            return compactTitle(seed, seed)
+        }
+        return compact
+    }
+
+    private fun compactTitle(raw: String, seed: String): String {
+        fun keywordsFrom(text: String): List<String> {
+            val tokens = Regex("[\\p{L}\\p{N}]+").findAll(text).map { it.value }.toList()
+            if (tokens.isEmpty()) return emptyList()
+            val stop = setOf(
+                "de", "la", "el", "los", "las", "y", "o", "a", "en", "para", "por", "con", "sin",
+                "un", "una", "unos", "unas", "the", "and", "or", "to", "of", "in", "for", "with",
+                "on", "at", "by", "from", "is", "are", "be", "this", "that", "these", "those",
+                "here", "some", "title", "titulo", "prompt", "chat", "keyword", "keywords", "word", "words"
+            )
+            val filtered = tokens.filter { t ->
+                t.any { it.isLetter() } && !stop.contains(t.lowercase())
+            }
+            return (if (filtered.isNotEmpty()) filtered else tokens).take(4)
+        }
+        val kw = keywordsFrom(raw).ifEmpty { keywordsFrom(seed) }
+        return if (kw.isEmpty()) "New prompt" else kw.joinToString(" ")
     }
 
     private fun callOpenAIAndPost(userText: String, vaultId: String?, imageDataUrl: String?) {
@@ -906,10 +1729,7 @@ class ChatFragment : Fragment() {
             val hasImage = !imageDataUrl.isNullOrBlank()
             if (hasImage && useGroq && !model.contains("vision", ignoreCase = true)) {
                 Handler(Looper.getMainLooper()).post {
-                    addMessage(
-                        "DEBUG vision_model_required\nSelected model=$model\nPick a Groq vision model in Settings → Groq chat model.",
-                        false
-                    )
+                    addDebug("vision_model_required model=$model use a Groq vision model in settings")
                 }
                 return
             }
@@ -963,7 +1783,7 @@ class ChatFragment : Fragment() {
                 Log.d(TAG, (if (useGroq) "Groq" else "OpenAI") + " HTTP ${resp.code} body=${raw.take(500)}")
                 Handler(Looper.getMainLooper()).post {
                     if (!ok) {
-                        addMessage("DEBUG api_error\nprovider=" + (if (useGroq) "groq" else "openai") + "\nstatus=${resp.code}\nbody=${raw.take(200)}", false)
+                        addDebug("api_error provider=" + (if (useGroq) "groq" else "openai") + " status=${resp.code} body=${raw.take(200)}")
                     }
                     addMessage(reply, false)
                     maybeAutoSpeakReply(reply)
@@ -972,16 +1792,24 @@ class ChatFragment : Fragment() {
         } catch (e: Exception) {
             Log.e(TAG, "API request failed", e)
             Handler(Looper.getMainLooper()).post {
-                addMessage("DEBUG api_exception\nerr=${e.message}", false)
+                addDebug("api_exception err=${e.message}")
                 addMessage("Provider fallo: ${e.message}", false)
             }
         }
     }
 
     private val REQ_AUDIO = 1001
+    private val REQ_CAMERA = 1002
+    private val REQ_CAMERA_CAPTURE = 2203
+    private val REQ_FILE_PICK = 2204
     private fun requestPermissionCompat(permission: String) {
         if (ContextCompat.checkSelfPermission(requireContext(), permission) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(requireActivity(), arrayOf(permission), if (permission == Manifest.permission.RECORD_AUDIO) REQ_AUDIO else 0)
+            val code = when (permission) {
+                Manifest.permission.RECORD_AUDIO -> REQ_AUDIO
+                Manifest.permission.CAMERA -> REQ_CAMERA
+                else -> 0
+            }
+            ActivityCompat.requestPermissions(requireActivity(), arrayOf(permission), code)
         }
     }
 
@@ -1256,10 +2084,15 @@ class ChatFragment : Fragment() {
 
     private fun setWhisperBanner(tv: android.widget.TextView?, ok: Boolean, text: String) {
         tv ?: return
-        tv.visibility = View.VISIBLE
-        tv.text = "Whisper v" + appVersion() + ": " + text
-        val color = if (ok) Color.parseColor("#2E7D32") else Color.parseColor("#B71C1C")
-        tv.setBackgroundColor(color)
+        val status = "Whisper: " + text
+        tv.visibility = View.GONE
+        try {
+            val prefs = requireContext().getSharedPreferences("settings", 0)
+            prefs.edit()
+                .putString("whisper_status_text", status)
+                .putBoolean("whisper_status_ok", ok)
+                .apply()
+        } catch (_: Throwable) {}
     }
 
     private fun appVersion(): String {
@@ -1496,6 +2329,19 @@ class ChatFragment : Fragment() {
         if (text.isNotBlank()) {
             try {
                 val prefs = appCtx?.getSharedPreferences("settings", 0)
+                val preview = prefs?.getBoolean(SettingsFragment.KEY_MIC_PREVIEW, false) == true
+                val autoSend = prefs?.getBoolean(SettingsFragment.KEY_MIC_AUTO_SEND, true) == true
+                if (preview || !autoSend) {
+                    val input = inputField
+                    if (input != null) {
+                        val existing = input.text?.toString().orEmpty().trim()
+                        val merged = if (existing.isBlank()) text else (existing + " " + text)
+                        input.setText(merged)
+                        input.setSelection(merged.length)
+                        updateSendVisibility()
+                    }
+                    return
+                }
                 if (prefs?.getBoolean(SettingsFragment.KEY_TTS_AUTO_TRANSCRIPT, false) == true) {
                     speakText(text)
                 }
@@ -1548,22 +2394,10 @@ class ChatFragment : Fragment() {
             } else if (msg.startsWith("whisper: decoded") || msg.startsWith("whisper: decode exception")) {
                 setWhisperDecoding(false)
             }
-            if (shouldShowDebugInChat(msg)) {
-                messages.add(Message("DEBUG $msg", false))
-                adapter.notifyItemInserted(messages.lastIndex)
-                scheduleSaveChatHistory()
-            }
         }
     }
 
     private fun shouldShowDebugInChat(msg: String): Boolean {
-        val m = msg.trim()
-        if (m.isBlank()) return false
-        if (m.startsWith("whisper: text=")) return false
-        if (m.startsWith("whisper:")) return true
-        if (m.startsWith("perm:")) return true
-        if (m.contains("no audio frames", ignoreCase = true)) return true
-        if (m.contains("error", ignoreCase = true) || m.contains("exception", ignoreCase = true) || m.contains("failed", ignoreCase = true)) return true
         return false
     }
 
@@ -1576,7 +2410,7 @@ class ChatFragment : Fragment() {
 
     private fun toggleListening() {
         if (!android.speech.SpeechRecognizer.isRecognitionAvailable(requireContext())) {
-            addMessage("DEBUG speech: no recognizer available", false)
+            addDebug("speech: no recognizer available")
             return
         }
         if (!isListening) startListening() else stopListening()
@@ -1590,12 +2424,12 @@ class ChatFragment : Fragment() {
         }
         if (speech == null) speech = android.speech.SpeechRecognizer.createSpeechRecognizer(requireContext())
         speech?.setRecognitionListener(object : android.speech.RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { addMessage("DEBUG speech: ready", false) }
+            override fun onReadyForSpeech(params: Bundle?) { addDebug("speech: ready") }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { isListening = false }
-            override fun onError(error: Int) { isListening = false; addMessage("DEBUG speech error: $error", false) }
+            override fun onError(error: Int) { isListening = false; addDebug("speech error: $error") }
             override fun onResults(results: Bundle) { handleResults(results) }
             override fun onPartialResults(partialResults: Bundle) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -1683,6 +2517,106 @@ class ChatFragment : Fragment() {
                 addDebug("perm: RECORD_AUDIO denied")
             }
         }
+        if (requestCode == REQ_CAMERA) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            val shouldLaunch = granted && pendingCameraAfterPermission
+            pendingCameraAfterPermission = false
+            if (shouldLaunch) launchCameraIntent()
+        }
+    }
+
+    private fun updateAutoSendButton() {
+        val btn = autoSendButton ?: return
+        val prefs = appCtx?.getSharedPreferences("settings", 0)
+        val auto = prefs?.getBoolean(SettingsFragment.KEY_MIC_AUTO_SEND, true) == true
+        btn.visibility = View.VISIBLE
+        btn.isEnabled = true
+        btn.setImageResource(android.R.drawable.ic_menu_upload)
+        btn.contentDescription = if (auto) "Auto-send ON" else "Auto-send OFF"
+        btn.alpha = if (auto) 1.0f else 0.55f
+        try {
+            btn.background?.setTint(if (auto) Color.parseColor("#2E7D32") else Color.parseColor("#263238"))
+            btn.imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        } catch (_: Throwable) {}
+        btn.setOnClickListener { toggleAutoSend() }
+    }
+
+    private fun toggleAutoSend() {
+        try {
+            val prefs = appCtx?.getSharedPreferences("settings", 0) ?: return
+            val next = !prefs.getBoolean(SettingsFragment.KEY_MIC_AUTO_SEND, true)
+            prefs.edit().putBoolean(SettingsFragment.KEY_MIC_AUTO_SEND, next).apply()
+            updateAutoSendButton()
+        } catch (_: Throwable) {}
+    }
+}
+
+class ChatTabsAdapter(
+    private var items: List<ConversationStore.Conversation>,
+    private var activeId: String?,
+    private val onClick: (ConversationStore.Conversation) -> Unit,
+    private val onClose: (ConversationStore.Conversation) -> Unit,
+    private val onLongClick: (ConversationStore.Conversation) -> Unit,
+) : RecyclerView.Adapter<ChatTabVH>() {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChatTabVH {
+        val v = LayoutInflater.from(parent.context).inflate(R.layout.item_chat_tab, parent, false)
+        return ChatTabVH(v, onClick, onClose, onLongClick)
+    }
+    override fun onBindViewHolder(holder: ChatTabVH, position: Int) {
+        holder.bind(items[position], items[position].id == activeId)
+    }
+    override fun getItemCount(): Int = items.size
+    fun update(newItems: List<ConversationStore.Conversation>, activeId: String?) {
+        items = newItems
+        this.activeId = activeId
+        notifyDataSetChanged()
+    }
+    fun setActiveId(id: String?) {
+        activeId = id
+        notifyDataSetChanged()
+    }
+}
+
+class ChatTabVH(
+    view: View,
+    private val onClick: (ConversationStore.Conversation) -> Unit,
+    private val onClose: (ConversationStore.Conversation) -> Unit,
+    private val onLongClick: (ConversationStore.Conversation) -> Unit,
+) : RecyclerView.ViewHolder(view) {
+    private val label: TextView = view.findViewById(R.id.tab_label)
+    private val closeBtn: ImageButton = view.findViewById(R.id.tab_close)
+    private fun shortenTitle(raw: String, maxChars: Int = 18): String {
+        val t = raw.trim()
+        if (t.length <= maxChars) return t
+        return t.take(maxChars - 3).trimEnd() + "..."
+    }
+    private fun buildTabTitle(icon: String, title: String, color: Int): CharSequence {
+        val dot = "● "
+        val text = dot + icon + "  " + title
+        val out = SpannableStringBuilder(text)
+        try {
+            out.setSpan(ForegroundColorSpan(color), 0, dot.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } catch (_: Throwable) {}
+        return out
+    }
+    fun bind(item: ConversationStore.Conversation, isActive: Boolean) {
+        val icon = item.icon.trim().ifBlank { "??" }
+        val title = item.title.trim().ifBlank { "Chat" }
+        label.text = buildTabTitle(icon, shortenTitle(title), item.color)
+        val bg = label.background?.mutate()
+        if (bg != null) {
+            val color = if (isActive) item.color else Color.parseColor("#263238")
+            try { bg.setTint(color) } catch (_: Throwable) {}
+        }
+        label.alpha = if (isActive) 1.0f else 0.82f
+        try {
+            val closeBg = if (isActive) item.color else Color.parseColor("#263238")
+            closeBtn.background?.mutate()?.setTint(closeBg)
+            closeBtn.imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        } catch (_: Throwable) {}
+        itemView.setOnClickListener { onClick(item) }
+        itemView.setOnLongClickListener { onLongClick(item); true }
+        closeBtn.setOnClickListener { onClose(item) }
     }
 }
 
@@ -1710,6 +2644,7 @@ class MessageVH(
     private val textOther: android.widget.TextView = view.findViewById(R.id.text_other)
     private val speakMe: ImageButton = view.findViewById(R.id.btn_speak_me)
     private val speakOther: ImageButton = view.findViewById(R.id.btn_speak_other)
+    private val editMe: ImageButton = view.findViewById(R.id.btn_edit_me)
     fun bind(m: Message) {
         val t = m.text.trim()
         val speakable =
@@ -1725,23 +2660,38 @@ class MessageVH(
             textMe.text = m.text
             speakMe.visibility = if (speakable) View.VISIBLE else View.GONE
             speakMe.setOnClickListener { onSpeak(m) }
+            editMe.visibility = View.VISIBLE
+            editMe.isEnabled = true
+            editMe.isClickable = true
+            editMe.isFocusable = true
+            editMe.alpha = 1.0f
+            editMe.imageTintList = ColorStateList.valueOf(Color.WHITE)
+            editMe.imageAlpha = 255
+            editMe.setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN)
+            editMe.setBackgroundColor(Color.TRANSPARENT)
+            editMe.setOnClickListener {
+                val p = bindingAdapterPosition
+                if (p != RecyclerView.NO_POSITION) onEdit(p)
+            }
             val editLongClick = View.OnLongClickListener {
                 val p = bindingAdapterPosition
                 if (p != RecyclerView.NO_POSITION) onEdit(p)
                 true
             }
             bubbleMe.setOnLongClickListener(editLongClick)
-            textMe.setOnLongClickListener(editLongClick)
-            itemView.setOnLongClickListener(editLongClick)
+            textMe.setOnLongClickListener(null)
+            itemView.setOnLongClickListener(null)
         } else {
             bubbleMe.visibility = View.GONE
             bubbleOther.visibility = View.VISIBLE
             textOther.text = m.text
             speakOther.visibility = if (speakable) View.VISIBLE else View.GONE
             speakOther.setOnClickListener { onSpeak(m) }
+            editMe.visibility = View.GONE
             bubbleOther.setOnLongClickListener(null)
             textOther.setOnLongClickListener(null)
             itemView.setOnLongClickListener(null)
         }
     }
+
 }

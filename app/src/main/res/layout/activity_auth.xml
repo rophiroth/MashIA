@@ -1,16 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-<<<<<<< HEAD
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:gravity="center"
     android:padding="24dp"
     android:background="@drawable/bg_auth"
-=======
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp"
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -22,7 +16,6 @@
         android:textStyle="bold"
         android:paddingBottom="24dp" />
 
-<<<<<<< HEAD
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_google"
         style="@style/Widget.Material3.Button"
@@ -31,37 +24,22 @@
         android:text="Continue with Google"
         app:iconPadding="8dp"
         app:cornerRadius="16dp" />
-=======
-    <Button
-        android:id="@+id/btn_google"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Continue with Google" />
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
 
     <Space
         android:layout_width="match_parent"
         android:layout_height="12dp" />
 
-<<<<<<< HEAD
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_apple"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         style="@style/Widget.Material3.Button.TonalButton"
-=======
-    <Button
-        android:id="@+id/btn_apple"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
         android:text="Sign in with Apple (soon)" />
 
     <Space
         android:layout_width="match_parent"
         android:layout_height="12dp" />
 
-<<<<<<< HEAD
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_fb"
         android:layout_width="match_parent"
@@ -70,13 +48,3 @@
         android:text="Continue with Facebook (soon)" />
 
 </LinearLayout>
-=======
-    <Button
-        android:id="@+id/btn_fb"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Continue with Facebook (soon)" />
-
-</LinearLayout>
-
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec

@@ -18,7 +18,6 @@ Proyecto Android inicial para la app MashIA. Repositorio local configurado en la
 2. Deja que sincronice Gradle y descargue dependencias.
 3. Ejecuta la app en un emulador o dispositivo.
 
-<<<<<<< HEAD
 ## Login con Google (Firebase)
 
 Para que el botón "Continue with Google" funcione con Firebase Auth:
@@ -90,8 +89,6 @@ Wrapper Kotlin: `org.psyhackers.mashia.stt.WhisperEngine`.
 
 Cuando las fuentes estén presentes y `USE_WHISPERCPP=ON`, completa el wiring en `app/src/main/cpp/WhisperBridge.cpp` para cargar el modelo y ejecutar inferencia.
 
-=======
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
 ## Crear remoto en GitHub
 
 Con GitHub CLI (`gh`) autenticado:

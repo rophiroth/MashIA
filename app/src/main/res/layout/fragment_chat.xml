@@ -5,7 +5,6 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-<<<<<<< HEAD
     <TextView
         android:id="@+id/whisper_status"
         android:layout_width="match_parent"
@@ -15,49 +14,99 @@
         android:visibility="gone"
         android:textColor="@android:color/white"
         android:background="#B71C1C"
-        android:text="Whisper status"/>
+        android:text="Whisper status" />
 
     <LinearLayout
         android:id="@+id/chat_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:padding="8dp">
+        android:orientation="vertical"
+        android:padding="6dp">
 
-        <ImageButton
-            android:id="@+id/btn_new_chat"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_btn"
-            android:padding="8dp"
-            android:contentDescription="New chat"
-            android:src="@android:drawable/ic_menu_edit"
-            android:scaleType="centerInside" />
-
-        <TextView
-            android:id="@+id/chat_title"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:text="Chat"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <ImageButton
-            android:id="@+id/btn_chat_more"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_btn"
-            android:padding="8dp"
-            android:contentDescription="More"
-            android:src="@android:drawable/ic_menu_more"
-            android:scaleType="centerInside" />
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/chat_tabs"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:overScrollMode="never" />
+
+            <ImageButton
+                android:id="@+id/btn_new_chat"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="@android:color/transparent"
+                android:padding="4dp"
+                android:contentDescription="New chat"
+                android:src="@android:drawable/ic_menu_add"
+                android:scaleType="centerInside" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/chat_app_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:text="MA"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/chat_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:text="Chat"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btn_tts"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_btn"
+                android:padding="6dp"
+                android:contentDescription="Auto voice"
+                android:src="@android:drawable/ic_lock_silent_mode_off"
+                android:scaleType="centerInside"
+                android:visibility="visible" />
+
+            <ImageButton
+                android:id="@+id/btn_chat_more"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_btn"
+                android:padding="6dp"
+                android:contentDescription="More"
+                android:src="@android:drawable/ic_menu_more"
+                android:scaleType="centerInside" />
+        </LinearLayout>
     </LinearLayout>
 
-=======
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
+    <FrameLayout
+        android:id="@+id/chat_library_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/messages_list"
         android:layout_width="match_parent"
@@ -65,6 +114,7 @@
         android:layout_weight="1" />
 
     <LinearLayout
+        android:id="@+id/chat_input_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -72,7 +122,6 @@
 
         <ImageButton
             android:id="@+id/btn_attach"
-<<<<<<< HEAD
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="@drawable/bg_btn"
@@ -82,78 +131,11 @@
             android:scaleType="centerInside"
             android:layout_marginEnd="6dp" />
 
-        <ImageButton
-            android:id="@+id/btn_camera"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_btn"
-            android:padding="8dp"
-            android:contentDescription="Camera"
-            android:src="@android:drawable/ic_menu_camera"
-            android:scaleType="centerInside"
-            android:layout_marginEnd="6dp" />
-
-        <ImageButton
-            android:id="@+id/btn_mic"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_mic"
-            android:padding="8dp"
-            android:contentDescription="Mic"
-            android:src="@drawable/ic_mic"
-            android:scaleType="centerInside"
-            android:layout_marginEnd="6dp" />
-
-        <ImageButton
-            android:id="@+id/btn_tts"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_btn"
-            android:padding="8dp"
-            android:contentDescription="Auto voice"
-            android:src="@android:drawable/ic_lock_silent_mode_off"
-            android:scaleType="centerInside"
-            android:layout_marginEnd="6dp"
-            android:visibility="visible" />
-
-        <ImageButton
-            android:id="@+id/btn_library"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_btn"
-            android:padding="8dp"
-            android:contentDescription="Library"
-            android:src="@android:drawable/ic_menu_agenda"
-            android:scaleType="centerInside"
-            android:layout_marginEnd="6dp"
-            android:visibility="visible" />
-=======
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="Attach"
-            android:src="@android:drawable/ic_menu_add" />
-
-        <ImageButton
-            android:id="@+id/btn_camera"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="Camera"
-            android:src="@android:drawable/ic_menu_camera" />
-
-        <ImageButton
-            android:id="@+id/btn_mic"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="Mic"
-            android:src="@android:drawable/ic_btn_speak_now" />
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec
-
         <EditText
             android:id="@+id/input_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-<<<<<<< HEAD
             android:hint="Write" />
 
         <ImageButton
@@ -164,21 +146,19 @@
             android:padding="8dp"
             android:contentDescription="Send"
             android:src="@android:drawable/ic_menu_send"
-            android:scaleType="centerInside" />
-    </LinearLayout>
-
-</LinearLayout>
-=======
-            android:hint="Type a message" />
+            android:scaleType="centerInside"
+            android:visibility="gone" />
 
         <ImageButton
-            android:id="@+id/btn_send"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="Send"
-            android:src="@android:drawable/ic_menu_send" />
+            android:id="@+id/btn_mic"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_mic"
+            android:padding="8dp"
+            android:contentDescription="Mic"
+            android:src="@drawable/ic_mic"
+            android:scaleType="centerInside"
+            android:layout_marginStart="6dp" />
     </LinearLayout>
 
 </LinearLayout>
-
->>>>>>> 066957aeb982b01080f077862cfa8d4e3bbbf5ec

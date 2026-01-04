@@ -13,6 +13,7 @@ import java.util.Locale
 object DebugFileLogger {
     private var file: File? = null
     private val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+    @Volatile private var enabled: Boolean = true
 
     @Synchronized
     fun init(ctx: Context) {
@@ -20,11 +21,14 @@ object DebugFileLogger {
         try {
             file = File(ctx.filesDir, "diag_log.txt")
             file?.parentFile?.mkdirs()
+            val prefs = ctx.getSharedPreferences("settings", 0)
+            enabled = prefs.getBoolean("debug_enabled", true)
         } catch (_: Throwable) {}
     }
 
     @Synchronized
     fun log(tag: String, msg: String) {
+        if (!enabled) return
         val f = file ?: return
         try {
             val now = fmt.format(Date())
@@ -37,4 +41,10 @@ object DebugFileLogger {
             }
         } catch (_: Throwable) {}
     }
+
+    fun setEnabled(v: Boolean) {
+        enabled = v
+    }
+
+    fun isEnabled(): Boolean = enabled
 }
